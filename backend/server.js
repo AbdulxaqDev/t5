@@ -32,8 +32,6 @@ connectDB().then((response) => {
   });
 
   client.on("connection", (socket) => {
-   console.log("Scket id: ", socket.id);
-   console.log("---");
    // Create function to send status
    sendStatus = function (s) {
     socket.emit("status", s);
@@ -214,17 +212,15 @@ app.get("/gmail/user/:id", async (req, res) => {
  }
 });
 
-// app.use("/api/auth", require("./routes/authRoutes"));
 
 // // Serve frontend
-// if (process.env.NODE_ENV === "production") {
-//  app.use(express.static(path.join(__dirname, "../frontend/build")))
-//  app.get('*', (req, res) => res.sendFile(path.resolve(__dirname, '../', 'frontend', 'build', 'index.html')))
-// } else {
-//  app.get('/', (req, res) => res.send("Please set to production"))
-// }
+if (process.env.NODE_ENV === "production") {
+ app.use(express.static(path.join(__dirname, "../frontend/build")))
+ app.get('*', (req, res) => res.sendFile(path.resolve(__dirname, '../', 'frontend', 'build', 'index.html')))
+} else {
+ app.get('/', (req, res) => res.send("Please set to production"))
+}
 
-// app.use(errorHandler)
 
 app.listen(port, () => {
  console.log(`Server started on port ${port}`);
