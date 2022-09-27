@@ -8,7 +8,7 @@ import io from "socket.io-client";
 import { useNavigate } from "react-router-dom";
 
 // Connect to socket
-export const socket = io.connect(":4000");
+export const socket = io.connect("/");
 
 export default function MessageBoard({ update = () => {}, allUsersNameAndId }) {
  const [title, setTitle] = useState("");

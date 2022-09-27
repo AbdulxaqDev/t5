@@ -11,6 +11,10 @@ const { User } = require("./models/userModel");
 const port = process.env.PORT || 5000;
 
 const app = express();
+const server = app.listen(port, () => {
+ console.log(`Server started on port ${port}`);
+});
+
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
@@ -24,7 +28,7 @@ connectDB().then((response) => {
    return `${d.getDay()}-${d.getMonth()}-${d.getFullYear()} ${d.getHours()}:${d.getMinutes()}`;
   };
   //Connect to Socket.io
-  const client = new Server(4000, {
+  const client = new Server(server,{
    cors: {
     origin: "*",
     methods: ["GET", "POST"],
@@ -222,6 +226,3 @@ if (process.env.NODE_ENV === "production") {
 }
 
 
-app.listen(port, () => {
- console.log(`Server started on port ${port}`);
-});
