@@ -2,6 +2,7 @@ const path = require("path");
 const express = require("express");
 const colors = require("colors");
 const dotenv = require("dotenv").config();
+const cors = require("cors");
 const connectDB = require("./config/db");
 const { Server } = require("socket.io");
 
@@ -14,26 +15,55 @@ const app = express();
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
+
 // Connect to MongooseDB
 connectDB().then((response) => {
  if (response) {
-  const date = () => { 
-   const d = new Date()
-   return `${d.getDay()}-${d.getMonth()}-${d.getFullYear()} ${d.getHours()}:${d.getMinutes()}`
-  }
+  const date = () => {
+   const d = new Date();
+   return `${d.getDay()}-${d.getMonth()}-${d.getFullYear()} ${d.getHours()}:${d.getMinutes()}`;
+  };
   //Connect to Socket.io
-  const client = new Server(4000);
+  const client = new Server(4000, {
+   cors: {
+    origin: "*",
+    methods: ["GET", "POST"],
+   },
+  });
 
   client.on("connection", (socket) => {
+   console.log("Scket id: ", socket.id);
+   console.log("---");
    // Create function to send status
    sendStatus = function (s) {
     socket.emit("status", s);
    };
 
+   socket.on("output", async (id) => {
+    const user = await User.findById({ _id: id });
+    const allUsersNameAndId = await User.find({}, { name: 1, _id: 1 });
+    socket.emit("output", { userData: user, allUsersNameAndId });
+   });
+
+
    // Handle input events
    socket.on("input", async function (data) {
-    const { current_user_id, messenger_name, messenger_id, isMe, title, body } =
-     data;
+
+    
+    const {
+     current_user_id,
+     current_user_name,
+     messenger_name,
+     messenger_id,
+     title,
+     body,
+    } = data;
+
+
+    client.sockets.emit('check', { sender: current_user_name, recipient_id: messenger_id})
+    
+
+
 
     // Check details are not empty
     if (
@@ -48,15 +78,25 @@ connectDB().then((response) => {
      );
     } else {
      // Check messenger existes
-     const isMessengerExists = await User.find({
+     const isMessengerExists = await User.findOne({
       _id: current_user_id,
       "all_messages.messenger_id": messenger_id,
      });
+
+     const amIExistOnRecipient = await User.findOne({
+      _id: messenger_id,
+      "all_messages.messenger_id": current_user_id,
+     });
+
      if (isMessengerExists) {
       // add messenger message to user list
-      User.findOneAndUpdate(
+      await User.findOneAndUpdate(
        { _id: current_user_id, "all_messages.messenger_id": messenger_id },
-       { $push: { messages: { isMe, title, body, time: date() } } }
+       {
+        $push: {
+         "all_messages.$.messages": { isMe: true, title, body, time: date() },
+        },
+       }
       );
      } else {
       User.findOneAndUpdate(
@@ -68,19 +108,62 @@ connectDB().then((response) => {
           messenger_id,
           messages: [
            {
-            isMe,
+            isMe: true,
             title,
             body,
-            time: date()
+            time: date(),
            },
           ],
          },
         },
        },
        (err, messenger) => {
-        client.emit("output", [data]);
+        // sendStatus({
+        //  message: "Message sent successfully!",
+        //  clear: true,
+        // });
+       }
+      );
+     }
+
+     if (amIExistOnRecipient) {
+      // add messenger message to user list
+       await User.findOneAndUpdate(
+       { _id: messenger_id, "all_messages.messenger_id": current_user_id },
+       {
+        $push: {
+         "all_messages.$.messages": { isMe: false, title, body, time: date() },
+        },
+       }
+      );
+     } else {
+      User.findOneAndUpdate(
+       { _id: messenger_id },
+       {
+        $push: {
+         all_messages: {
+          messenger_name: current_user_name,
+          messenger_id: current_user_id,
+          messages: [
+           {
+            isMe: false,
+            title,
+            body,
+            time: date(),
+           },
+          ],
+         },
+        },
+       },
+       (err, messenger) => {
+        if (err) {
+         return sendStatus({
+          message: err,
+          clear: true,
+         });
+        }
         sendStatus({
-         message: "Message sent",
+         message: "Message sent successfully!",
          clear: true,
         });
        }
@@ -96,6 +179,12 @@ app.put("/gmail/user", async (req, res) => {
  const { name } = req.body;
  if (!name) {
   return res.status(400).json({ message: "Invalid credentials" });
+ }
+
+ // Check if user exist
+ let userName = await User.findOne({ name: name });
+ if (userName) {
+  return res.status(400).json({ message: "Username already taken" });
  }
 
  const user = await User.create({ name });
@@ -119,7 +208,7 @@ app.get("/gmail/user/:id", async (req, res) => {
 
  const user = await User.findById({ _id: id });
  if (user) {
-  res.status(201).json(user);
+  res.status(201).json(user.all_messages);
  } else {
   res.status(400).json({ message: "Invalid credentials" });
  }
@@ -140,6 +229,3 @@ app.get("/gmail/user/:id", async (req, res) => {
 app.listen(port, () => {
  console.log(`Server started on port ${port}`);
 });
-
-
-
